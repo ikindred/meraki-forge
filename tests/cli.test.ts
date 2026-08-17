@@ -25,6 +25,7 @@ function harness(overrides: Partial<CliServices> = {}) {
     ],
   };
   const services: CliServices = {
+    init: vi.fn(() => Promise.resolve({ ...result, status: "READY" as const })),
     bootstrap: vi.fn(() => Promise.resolve(result)),
     doctor: vi.fn(() => Promise.resolve(result)),
     validate: vi.fn(() =>
@@ -52,7 +53,13 @@ describe("Forge CLI", () => {
     const h = harness();
     expect(await runCli(["--help"], h.services, h.io)).toBe(0);
     expect(h.out.join("\n")).toContain("forge bootstrap");
-    for (const command of ["bootstrap", "doctor", "validate", "upgrade"])
+    for (const command of [
+      "init",
+      "bootstrap",
+      "doctor",
+      "validate",
+      "upgrade",
+    ])
       expect(await runCli([command, "--help"], h.services, h.io)).toBe(0);
     expect(await runCli(["unknown"], h.services, h.io)).toBe(2);
     expect(h.err.at(-1)).toContain("Unknown command");

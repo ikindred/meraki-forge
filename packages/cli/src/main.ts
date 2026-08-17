@@ -2,7 +2,9 @@
 import { pathToFileURL } from "node:url";
 import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
-import { lstat, readFile, realpath } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, lstat, readFile, realpath } from "node:fs/promises";
+import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
@@ -11,6 +13,13 @@ import { z } from "zod";
 import { PersonaSchema } from "../../kernel/src/contracts.js";
 import { normalizeRepoPath } from "../../kernel/src/ownership.js";
 import { runMasterCommand } from "./master-commands.js";
+import {
+  applyMachineInit,
+  loadMasterConfig,
+  planMachineInit,
+} from "../../adapters/src/machine-init.js";
+import { MasterConfigSchema } from "../../kernel/src/master-config.js";
+import { GlobalProjectRegistry } from "../../adapters/src/global-project-registry.js";
 import { inspectProjectRepository } from "../../adapters/src/project-inspector.js";
 import {
   applyBootstrapPlan,
@@ -45,8 +54,11 @@ export interface CliCommandOptions {
   readonly dryRun?: boolean;
   readonly nonInteractive?: boolean;
   readonly configPath?: string;
+  readonly projectsRoot?: string;
+  readonly vaultPath?: string;
 }
 export interface CliServices {
+  readonly init: (options: CliCommandOptions) => Promise<CliResult>;
   readonly bootstrap: (options: CliCommandOptions) => Promise<CliResult>;
   readonly doctor: (options: CliCommandOptions) => Promise<CliResult>;
   readonly validate: (options: CliCommandOptions) => Promise<CliResult>;
@@ -59,7 +71,7 @@ export interface CliIo {
 }
 export type CliPrompt = (question: string) => Promise<string>;
 
-const HELP = `Meraki Forge\n\nUsage:\n  forge bootstrap [--dry-run] [--non-interactive] [--config <file>] [--json]\n  forge doctor [--config <file>] [--json]\n  forge validate [--config <file>] [--json]\n  forge upgrade [--dry-run] [--non-interactive] [--config <file>] [--json]\n  forge project create|onboard|list|inspect|status|remove|graph ...\n  forge ownership review [project] ...\n  forge help\n\nExit codes: 0 ready, 1 failed, 2 invalid usage.`;
+const HELP = `Meraki Forge\n\nUsage:\n  forge init [--dry-run] [--non-interactive] [--projects-root <path>] [--vault <path>] [--config <file>] [--json]\n  forge bootstrap [--dry-run] [--non-interactive] [--config <file>] [--json]\n  forge doctor [--config <file>] [--json]\n  forge validate [--config <file>] [--json]\n  forge upgrade [--dry-run] [--non-interactive] [--config <file>] [--json]\n  forge project create|onboard|list|inspect|status|remove|graph ...\n  forge ownership review [project] ...\n  forge help\n\nExit codes: 0 ready, 1 failed, 2 invalid usage.`;
 
 export async function runCli(
   argv: readonly string[],
@@ -78,7 +90,11 @@ export async function runCli(
   }
   if (command === "project" || command === "ownership")
     return runMasterCommand([command, ...args], io);
-  if (!new Set(["bootstrap", "doctor", "validate", "upgrade"]).has(command)) {
+  if (
+    !new Set(["init", "bootstrap", "doctor", "validate", "upgrade"]).has(
+      command,
+    )
+  ) {
     io.stderr(`Unknown command: ${command}\n\n${HELP}`);
     return 2;
   }
@@ -120,18 +136,20 @@ function parseOptions(
   let json = false,
     dryRun = false,
     nonInteractive = false,
-    configPath: string | undefined;
+    configPath: string | undefined,
+    projectsRoot: string | undefined,
+    vaultPath: string | undefined;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
     if (arg === "--json") json = true;
     else if (
       arg === "--dry-run" &&
-      (command === "bootstrap" || command === "upgrade")
+      (command === "init" || command === "bootstrap" || command === "upgrade")
     )
       dryRun = true;
     else if (
       arg === "--non-interactive" &&
-      (command === "bootstrap" || command === "upgrade")
+      (command === "init" || command === "bootstrap" || command === "upgrade")
     )
       nonInteractive = true;
     else if (arg === "--config") {
@@ -140,6 +158,17 @@ function parseOptions(
         return "--config requires a file path";
       configPath = value;
       index += 1;
+    } else if (arg === "--projects-root" && command === "init") {
+      const value = args[index + 1];
+      if (!value || value.startsWith("-"))
+        return "--projects-root requires a path";
+      projectsRoot = value;
+      index += 1;
+    } else if (arg === "--vault" && command === "init") {
+      const value = args[index + 1];
+      if (!value || value.startsWith("-")) return "--vault requires a path";
+      vaultPath = value;
+      index += 1;
     } else return `Unknown option for ${command}: ${arg}`;
   }
   return {
@@ -147,6 +176,8 @@ function parseOptions(
     ...(dryRun ? { dryRun } : {}),
     ...(nonInteractive ? { nonInteractive } : {}),
     ...(configPath ? { configPath } : {}),
+    ...(projectsRoot ? { projectsRoot } : {}),
+    ...(vaultPath ? { vaultPath } : {}),
   };
 }
 function renderHuman(
@@ -164,11 +195,82 @@ export function createDefaultCliServices(
   prompt: CliPrompt = terminalPrompt,
 ): CliServices {
   return {
+    init: initCommand,
     bootstrap: async (options) => bootstrapCommand(options, prompt),
     doctor: doctorCommand,
     validate: validateCommand,
     upgrade: upgradeCommand,
   };
+}
+
+async function initCommand(options: CliCommandOptions): Promise<CliResult> {
+  const masterHome = machineHome();
+  const supplied = options.configPath
+    ? MasterConfigSchema.parse(
+        parse(await boundedRead(resolve(options.cwd, options.configPath)), {
+          maxAliasCount: 0,
+          uniqueKeys: true,
+        }),
+      )
+    : undefined;
+  if (
+    supplied &&
+    resolve(supplied.registry.path) !== join(masterHome, "projects.yml")
+  )
+    throw new Error(
+      "Configured registry path must match the Forge master home registry",
+    );
+  const plan = await planMachineInit({
+    forgeRoot: supplied?.forge_root ?? options.cwd,
+    masterHome,
+    documentsRoot:
+      process.env.MERAKI_FORGE_DOCUMENTS_ROOT ?? join(homedir(), "Documents"),
+    ...((supplied?.projects_root ?? options.projectsRoot)
+      ? { projectsRoot: (supplied?.projects_root ?? options.projectsRoot)! }
+      : {}),
+    ...((supplied?.obsidian_vault ?? options.vaultPath)
+      ? { obsidianVault: (supplied?.obsidian_vault ?? options.vaultPath)! }
+      : {}),
+  });
+  const applied = options.dryRun
+    ? { status: "DRY_RUN" as const, changes: plan.changes }
+    : await applyMachineInit(plan);
+  const readiness = options.dryRun
+    ? undefined
+    : await machineDoctorCommand(options);
+  return {
+    status: readiness?.status ?? "READY",
+    summary:
+      applied.status === "UNCHANGED"
+        ? "Forge machine initialization is already current"
+        : options.dryRun
+          ? "Forge machine initialization dry-run completed with zero mutations"
+          : "Forge machine environment initialized",
+    checks: [
+      { status: "PASS", name: "Forge root", message: plan.forge_root },
+      { status: "PASS", name: "Projects root", message: plan.projects_root },
+      { status: "PASS", name: "Shared vault", message: plan.obsidian_vault },
+      { status: "PASS", name: "Master config", message: plan.config_path },
+      { status: "PASS", name: "Project registry", message: plan.registry_path },
+      {
+        status: "PASS",
+        name: "Changes",
+        message: applied.changes.length
+          ? applied.changes.join(", ")
+          : "UNCHANGED",
+      },
+      ...(readiness?.checks.map((check) => ({
+        ...check,
+        name: `Doctor: ${check.name}`,
+      })) ?? []),
+    ],
+  };
+}
+
+function machineHome(): string {
+  return resolve(
+    process.env.MERAKI_FORGE_HOME ?? join(homedir(), ".meraki-forge"),
+  );
 }
 
 async function bootstrapCommand(
@@ -435,6 +537,11 @@ function parseGovernance(source: string): unknown {
 }
 
 async function doctorCommand(options: CliCommandOptions): Promise<CliResult> {
+  if (
+    !options.configPath &&
+    !(await pathExists(join(options.cwd, ".forge/config.yml")))
+  )
+    return machineDoctorCommand(options);
   const validation = await validateCommand(options);
   if (validation.status === "NOT_READY") return validation;
   const inspection = await inspectProjectRepository(options.cwd);
@@ -462,7 +569,7 @@ async function doctorCommand(options: CliCommandOptions): Promise<CliResult> {
   ): Promise<boolean> =>
     promisify(execFileCallback)(executable, [...args], {
       cwd: inspection.repositoryRoot,
-      timeout: 10_000,
+      timeout: 1_000,
       maxBuffer: 256 * 1024,
       env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "" },
     })
@@ -535,6 +642,20 @@ async function doctorCommand(options: CliCommandOptions): Promise<CliResult> {
   const hasFailures = operationalChecks.some(
     (check) => check.status === "FAIL",
   );
+  let readiness = "PROJECT READY";
+  try {
+    const master = await loadMasterConfig(machineHome());
+    const registry = await new GlobalProjectRegistry(
+      master.registry.path,
+    ).load();
+    const registered = registry.projects.find(
+      (project) => project.repo_path === inspection.repositoryRoot,
+    );
+    if (registered?.registration_status === "ACTIVE")
+      readiness = "PROJECT ACTIVE";
+  } catch {
+    // Project-local doctor remains backward compatible without machine config.
+  }
   return {
     status: hasFailures
       ? "NOT_READY"
@@ -542,12 +663,156 @@ async function doctorCommand(options: CliCommandOptions): Promise<CliResult> {
         ? "READY_WITH_WARNINGS"
         : "READY",
     summary: hasFailures
-      ? "Forge is not ready in this environment"
+      ? "PROJECT NOT READY"
       : hasWarnings
-        ? "Forge can operate with warnings"
-        : "Forge can operate correctly in this environment",
+        ? `${readiness} WITH WARNINGS`
+        : readiness,
     checks: [...validation.checks, ...operationalChecks, ...warnings],
   };
+}
+
+async function machineDoctorCommand(
+  options: CliCommandOptions,
+): Promise<CliResult> {
+  const checks: CliCheck[] = [];
+  let config: Awaited<ReturnType<typeof loadMasterConfig>>;
+  try {
+    config = await loadMasterConfig(machineHome());
+    checks.push({
+      status: "PASS",
+      name: "Master config",
+      message: "schema version 1",
+    });
+  } catch {
+    return {
+      status: "NOT_READY",
+      summary: "MACHINE NOT READY — run forge init",
+      checks: [
+        {
+          status: "FAIL",
+          name: "Master config",
+          message: "missing or invalid; run forge init",
+        },
+      ],
+    };
+  }
+  const actualForgeRoot = await realpath(options.cwd).catch(() => "");
+  if (actualForgeRoot !== config.forge_root)
+    checks.push({
+      status: "FAIL",
+      name: "Forge root",
+      message: "current Forge root does not match master configuration",
+    });
+  const command = async (executable: string, args: readonly string[]) =>
+    promisify(execFileCallback)(executable, [...args], {
+      cwd: options.cwd,
+      timeout: 1_000,
+      maxBuffer: 256 * 1024,
+      env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "" },
+    })
+      .then(() => true)
+      .catch(() => false);
+  const probe = async (
+    name: string,
+    passed: Promise<boolean>,
+    required: boolean,
+    failure: string,
+  ) => {
+    const available = await passed;
+    checks.push({
+      status: available ? "PASS" : required ? "FAIL" : "WARNING",
+      name,
+      message: available ? "available" : failure,
+    });
+  };
+  await probe("Forge CLI", Promise.resolve(true), true, "CLI unavailable");
+  await probe(
+    "Node",
+    Promise.resolve(Number(process.versions.node.split(".")[0]) >= 22),
+    true,
+    "Node 22+ required",
+  );
+  await probe("npm", command("npm", ["--version"]), true, "npm unavailable");
+  await probe("Git", command("git", ["--version"]), true, "Git unavailable");
+  await probe(
+    "Graphify",
+    command("graphify", ["--help"]),
+    false,
+    "Graphify unavailable; project provisioning will stop before activation",
+  );
+  await probe(
+    "GitHub CLI",
+    command("gh", ["--version"]),
+    false,
+    "GitHub CLI unavailable; delivery is optional",
+  );
+  await probe(
+    "GitHub auth",
+    command("gh", ["auth", "status"]),
+    false,
+    "GitHub authentication unavailable; delivery is optional",
+  );
+  await probe(
+    "Projects root",
+    pathIsWritableDirectory(config.projects_root),
+    true,
+    "projects root missing or not writable",
+  );
+  await probe(
+    "Shared vault",
+    pathIsWritableDirectory(config.obsidian_vault),
+    true,
+    "shared vault missing or not writable",
+  );
+  const registry = await new GlobalProjectRegistry(config.registry.path)
+    .load()
+    .catch(() => undefined);
+  await probe(
+    "Registry",
+    Promise.resolve(
+      registry !== undefined &&
+        (!registry.shared_vault_path ||
+          registry.shared_vault_path === config.obsidian_vault) &&
+        registry.projects.every((project) =>
+          project.obsidian_project_path.startsWith(
+            `${config.obsidian_vault}${process.platform === "win32" ? "\\" : "/"}Projects${process.platform === "win32" ? "\\" : "/"}`,
+          ),
+        ),
+    ),
+    true,
+    "registry missing or invalid",
+  );
+  checks.push({
+    status: "PASS",
+    name: "Safety",
+    message: "auto-merge, production deploy, and cross-project writes disabled",
+  });
+  const failed = checks.some((check) => check.status === "FAIL");
+  const warned = checks.some((check) => check.status === "WARNING");
+  return {
+    status: failed ? "NOT_READY" : warned ? "READY_WITH_WARNINGS" : "READY",
+    summary: failed
+      ? "MACHINE NOT READY"
+      : warned
+        ? "MACHINE READY WITH WARNINGS"
+        : "MACHINE READY",
+    checks,
+  };
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  return access(path)
+    .then(() => true)
+    .catch(() => false);
+}
+async function pathIsWritableDirectory(path: string): Promise<boolean> {
+  try {
+    if (!(await lstat(path)).isDirectory()) return false;
+    await access(path, constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function containsPlaintextSecret(source: string): boolean {

@@ -1,5 +1,11 @@
 # Master Command Center
 
+## First-time machine initialization
+
+Run `forge init` once after installing the CLI. It creates the versioned master configuration and project registry under `~/.meraki-forge`, plus the configured projects root and shared Obsidian vault. `forge init --dry-run` reports the complete plan without filesystem mutations. Re-running init preserves registered projects and human vault content.
+
+After initialization, `forge doctor` reports machine readiness. `forge project create --name "Name"` uses the configured projects root and shared vault automatically.
+
 Meraki Forge maintains one global, versioned project registry above the existing per-repository execution engine. Every write request must resolve exactly one registered project before it can enter Director/Coordinator. Cross-project reads are allowed; cross-project writes are rejected.
 
 Each registered project retains its own Git repository, `.forge` governance and durable state, and project-local `graphify-out/` index. Graphify is an orientation aid only: Forge binds its metadata to a full Git commit and verifies all conclusions against the live repository.

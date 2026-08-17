@@ -11,6 +11,7 @@ export * from "./handoffs.js";
 export * from "./integration.js";
 export * from "./lease.js";
 export * from "./master-registry.js";
+export * from "./master-config.js";
 export * from "./ownership.js";
 export * from "./personas.js";
 export * from "./policy.js";

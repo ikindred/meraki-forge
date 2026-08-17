@@ -28,6 +28,7 @@ import {
 } from "../../adapters/src/shared-vault.js";
 import { inspectProjectRepository } from "../../adapters/src/project-inspector.js";
 import { FileOwnershipPolicyStore } from "../../adapters/src/ownership-policy-store.js";
+import { loadMasterConfig } from "../../adapters/src/machine-init.js";
 import { GraphifyService } from "../../execution/src/graphify-service.js";
 import {
   createOwnershipReview,
@@ -275,9 +276,9 @@ async function onboardCommand(
   cwd: string,
 ): Promise<MasterResult> {
   const repository = resolve(option(args, "--repo") ?? cwd);
-  const vault = option(args, "--vault");
-  if (!vault)
-    return notReady("Onboarding requires --vault <shared vault path>");
+  const vault =
+    option(args, "--vault") ??
+    (await loadMasterConfig(dirname(registryPath()))).obsidian_vault;
   const dryRun = args.includes("--dry-run");
   const inspection = await inspectProjectRepository(repository);
   const installedConfig = join(repository, ".forge/config.yml");
@@ -361,12 +362,19 @@ async function createCommand(
   cwd: string,
 ): Promise<MasterResult> {
   const name = option(args, "--name");
+  if (!name) return notReady("Project creation requires --name <display name>");
+  const explicitRepository = option(args, "--repo");
+  const explicitVault = option(args, "--vault");
+  const dryRun = args.includes("--dry-run");
+  const master =
+    explicitRepository && explicitVault
+      ? undefined
+      : await loadMasterConfig(dirname(registryPath()));
   const repository = resolve(
-    option(args, "--repo") ??
-      join(cwd, deterministicProjectId(name ?? "project")),
+    explicitRepository ??
+      join(master!.projects_root, deterministicProjectId(name ?? "project")),
   );
   const type = (option(args, "--type") ?? "full-stack") as ProjectType;
-  if (!name) return notReady("Project creation requires --name <display name>");
   const technology = recommendTechnology({
     project_type: type,
     scale: "medium",
@@ -374,15 +382,24 @@ async function createCommand(
     deployment_model: "managed",
     security_sensitivity: "standard",
   });
-  if (args.includes("--dry-run"))
+  if (dryRun)
     return ready("Project creation dry-run completed with zero writes", {
       project_id: deterministicProjectId(name),
       repository,
+      vault: resolve(explicitVault ?? master!.obsidian_vault),
+      forge_path: join(repository, ".forge"),
+      graphify_path: join(repository, "graphify-out"),
+      registry_path: master?.registry.path ?? registryPath(),
+      obsidian_project_path: join(
+        resolve(explicitVault ?? master!.obsidian_vault),
+        "Projects",
+        name,
+      ),
       technology,
     });
-  const vault = option(args, "--vault");
+  const vault = explicitVault ?? master?.obsidian_vault;
   if (!vault)
-    return notReady("Project creation requires --vault <shared vault path>");
+    return notReady("Forge machine is not initialized; run forge init");
   if (
     technology.requires_human_approval &&
     !args.includes("--approve-architecture")

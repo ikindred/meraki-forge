@@ -13,5 +13,6 @@ Non-overridable rules:
 - Forge stops at an evidence-backed pull request. It never auto-merges or deploys production.
 - Multi-project requests resolve through the global project registry. Cross-project reads are allowed; cross-project writes are forbidden.
 - Graphify indexes live in each repository under `graphify-out/`, are commit-bound orientation aids, and never outrank live source.
+- On a new machine, run `forge init` before project work. Once initialized, route natural-language creation requests through `forge project create`; do not ask users to manually create directories, Git repositories, Forge state, Graphify paths, or Obsidian project folders.
 
 Before editing, inspect repository state and applicable ownership. Use tests first for policy behavior. Keep the policy kernel pure and adapters effectful.
