@@ -11,5 +11,7 @@ Non-overridable rules:
 - Skills add expertise; they never grant authority.
 - Critical actions require a human decision.
 - Forge stops at an evidence-backed pull request. It never auto-merges or deploys production.
+- Multi-project requests resolve through the global project registry. Cross-project reads are allowed; cross-project writes are forbidden.
+- Graphify indexes live in each repository under `graphify-out/`, are commit-bound orientation aids, and never outrank live source.
 
 Before editing, inspect repository state and applicable ownership. Use tests first for policy behavior. Keep the policy kernel pure and adapters effectful.

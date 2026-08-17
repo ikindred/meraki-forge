@@ -10,10 +10,12 @@ import { parse, stringify } from "yaml";
 import { z } from "zod";
 import { PersonaSchema } from "../../kernel/src/contracts.js";
 import { normalizeRepoPath } from "../../kernel/src/ownership.js";
+import { runMasterCommand } from "./master-commands.js";
 import { inspectProjectRepository } from "../../adapters/src/project-inspector.js";
 import {
   applyBootstrapPlan,
   planBootstrap,
+  renderBootstrapManagedFiles,
 } from "../../execution/src/bootstrap-service.js";
 import { runProjectDoctor } from "../../execution/src/project-doctor.js";
 import {
@@ -57,7 +59,7 @@ export interface CliIo {
 }
 export type CliPrompt = (question: string) => Promise<string>;
 
-const HELP = `Meraki Forge\n\nUsage:\n  forge bootstrap [--dry-run] [--non-interactive] [--config <file>] [--json]\n  forge doctor [--config <file>] [--json]\n  forge validate [--config <file>] [--json]\n  forge upgrade [--dry-run] [--non-interactive] [--config <file>] [--json]\n  forge help\n\nExit codes: 0 ready, 1 failed, 2 invalid usage.`;
+const HELP = `Meraki Forge\n\nUsage:\n  forge bootstrap [--dry-run] [--non-interactive] [--config <file>] [--json]\n  forge doctor [--config <file>] [--json]\n  forge validate [--config <file>] [--json]\n  forge upgrade [--dry-run] [--non-interactive] [--config <file>] [--json]\n  forge project create|onboard|list|inspect|status|remove|graph ...\n  forge ownership review [project] ...\n  forge help\n\nExit codes: 0 ready, 1 failed, 2 invalid usage.`;
 
 export async function runCli(
   argv: readonly string[],
@@ -74,6 +76,8 @@ export async function runCli(
     io.stdout(HELP);
     return 0;
   }
+  if (command === "project" || command === "ownership")
+    return runMasterCommand([command, ...args], io);
   if (!new Set(["bootstrap", "doctor", "validate", "upgrade"]).has(command)) {
     io.stderr(`Unknown command: ${command}\n\n${HELP}`);
     return 2;
@@ -188,7 +192,7 @@ async function bootstrapCommand(
     throw new Error(
       "Configured repository_path does not match the inspected repository",
     );
-  const managedFiles = renderManagedFiles(config);
+  const managedFiles = renderBootstrapManagedFiles(config);
   const centerParts = config.obsidian.command_center_path.split(/[\\/]/u);
   const commandCenter = centerParts[0];
   if (
@@ -384,6 +388,17 @@ const OwnershipFileSchema = z
         .strict(),
     ),
     ambiguities: z.array(z.string()),
+    review: z
+      .object({
+        approved_by: z.string().min(1),
+        approved_at: z.iso.datetime(),
+        repository_path: z.string().min(1),
+        candidate_commit: z.string().regex(/^[a-f0-9]{40}$/u),
+        proposal_digest: z.string().regex(/^[a-f0-9]{64}$/u),
+        policy_digest: z.string().regex(/^[a-f0-9]{64}$/u),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 const ProvidersFileSchema = z
@@ -601,44 +616,6 @@ async function boundedRead(path: string): Promise<string> {
       "Configuration must be a regular file no larger than 1 MiB",
     );
   return readFile(path, "utf8");
-}
-function renderManagedFiles(
-  config: ForgeBootstrapConfig,
-): Readonly<Record<string, string>> {
-  return Object.freeze({
-    ".forge/config.yml": stringify(config),
-    ".forge/project.yml": stringify({
-      schema_version: "1",
-      project: config.project,
-      obsidian: config.obsidian,
-    }),
-    ".forge/ownership.yml": stringify({
-      schema_version: "1",
-      default_effect: "deny",
-      rules: [],
-      ambiguities: ["Initial ownership requires explicit review"],
-    }),
-    ".forge/providers.yml": stringify({
-      schema_version: "1",
-      github: {
-        enabled: config.delivery.create_pr,
-        remote_mutation_during_bootstrap: false,
-      },
-    }),
-    ".forge/evidence.yml": stringify({
-      schema_version: "1",
-      ...config.evidence,
-    }),
-    ".forge/scheduler.yml": stringify({
-      schema_version: "1",
-      provider: "human-setup-required",
-      contracts_only: true,
-    }),
-    ".forge/capabilities.yml": stringify({
-      schema_version: "1",
-      providers: [],
-    }),
-  });
 }
 async function interactiveConfig(
   inspection: Awaited<ReturnType<typeof inspectProjectRepository>>,

@@ -1,4 +1,6 @@
 import { isAbsolute } from "node:path";
+import { stringify } from "yaml";
+import type { ForgeBootstrapConfig } from "../../kernel/src/bootstrap-config.js";
 import {
   applyManagedBootstrapFiles,
   type BootstrapApplyResult,
@@ -177,6 +179,45 @@ export async function applyBootstrapPlan(
   options: Readonly<{ dryRun?: boolean }> = {},
 ): Promise<BootstrapApplyResult> {
   return applyManagedBootstrapFiles(plan, options.dryRun === true);
+}
+
+export function renderBootstrapManagedFiles(
+  config: ForgeBootstrapConfig,
+): Readonly<Record<string, string>> {
+  return Object.freeze({
+    ".forge/config.yml": stringify(config),
+    ".forge/project.yml": stringify({
+      schema_version: "1",
+      project: config.project,
+      obsidian: config.obsidian,
+    }),
+    ".forge/ownership.yml": stringify({
+      schema_version: "1",
+      default_effect: "deny",
+      rules: [],
+      ambiguities: ["Initial ownership requires explicit review"],
+    }),
+    ".forge/providers.yml": stringify({
+      schema_version: "1",
+      github: {
+        enabled: config.delivery.create_pr,
+        remote_mutation_during_bootstrap: false,
+      },
+    }),
+    ".forge/evidence.yml": stringify({
+      schema_version: "1",
+      ...config.evidence,
+    }),
+    ".forge/scheduler.yml": stringify({
+      schema_version: "1",
+      provider: "human-setup-required",
+      contracts_only: true,
+    }),
+    ".forge/capabilities.yml": stringify({
+      schema_version: "1",
+      providers: [],
+    }),
+  });
 }
 
 function safeSegment(value: string): string {
