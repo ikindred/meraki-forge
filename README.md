@@ -6,6 +6,6 @@ This repository is a clean implementation. The previous experimental workspace i
 
 ## Current scope
 
-Phase 1 builds the deterministic foundation: versioned contracts, task/state semantics, repository stack detection, persona composition, ownership enforcement, risk classification, routing, evidence policy, and release eligibility. Execution, worktree orchestration, evidence capture, GitHub delivery, and bootstrap commands follow in later phases.
+Phases 1-4 are implemented locally: deterministic foundation, resumable execution, independent validation/evidence, and controlled delivery to a verified PR ready for human review. Remote mutation remains default-deny and must be explicitly configured; Forge still has no merge or production deploy capability. Bootstrap/doctor/upgrade work remains Phase 5.
 
 See [architecture](docs/architecture/OVERVIEW.md), [constitution](docs/architecture/FORGE_CONSTITUTION.md), and [roadmap](docs/architecture/IMPLEMENTATION_ROADMAP.md).

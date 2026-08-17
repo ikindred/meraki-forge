@@ -4,7 +4,7 @@
 
 Reference inspection and categorized analysis.
 
-## Phase 1 — foundation (current)
+## Phase 1 — foundation (complete)
 
 1. Constitution, authority, architecture, task/state, ownership, risk, contracts, evidence, bootstrap design, and test strategy.
 2. Strict TypeScript/schema/test toolchain.
@@ -17,10 +17,18 @@ Reference inspection and categorized analysis.
 9. Gate planner, evidence validator, and PR eligibility evaluator.
 10. Architecture consistency and independent code/security review.
 
+## Phase 2 — execution (complete)
+
+Director, Coordinator, worktrees, claims, dispatch, dependency routing, attribution, repair, and integration.
+
+## Phase 3 — validation and proof (complete)
+
+Independent validation, candidate-bound proof capture, evidence integrity, repair routing, and validation persistence.
+
+## Phase 4 — delivery (complete)
+
+Controlled delivery to the autonomous boundary: verified PR ready for human review. This includes default-deny remote authorization, narrow task-branch push, idempotent Forge PR creation/update, Obsidian REVIEW projection, attachment containment, minimal notifications, deterministic End-of-Day reporting contracts, and resumable delivery state.
+
 ## Later phases
 
-Phase 2 implements Director, Coordinator, worktrees, claims, dispatch, dependency routing, attribution, repair, and integration. Phase 3 implements independent validation and proof capture. Phase 4 implements PR delivery, Obsidian REVIEW projection, reporting, and notifications. Phase 5 implements bootstrap, doctor, validate, and upgrade.
-
-## Phase 1 exit criteria
-
-Contracts are versioned/schema-valid; core policies are deterministic and immutable; cross-stack fixtures compose without weakening ownership; invalid/unsafe configuration fails closed; tests and coverage pass; docs identify remaining effectful work without claiming it exists.
+Phase 5 implements bootstrap, doctor, validate, and upgrade.

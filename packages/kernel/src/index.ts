@@ -1,6 +1,7 @@
 export * from "./contracts.js";
 export * from "./acceptance.js";
 export * from "./dependency-graph.js";
+export * from "./delivery.js";
 export * from "./execution.js";
 export * from "./evidence-manifest.js";
 export * from "./handoffs.js";

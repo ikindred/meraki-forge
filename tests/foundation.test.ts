@@ -516,7 +516,7 @@ describe("safety floors and gate planning", () => {
         auto_merge: false,
         production_deploy: false,
       }).auto_create_pr,
-    ).toBe(true);
+    ).toBe(false);
   });
   it("derives impact gates independently of task wording", () => {
     const plan = planGates(["ui", "database", "auth"], "HIGH");

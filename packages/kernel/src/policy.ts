@@ -5,7 +5,7 @@ export const ProjectPolicySchema = z
   .object({
     schema_version: z.literal("1"),
     autonomy_ceiling: z.enum(["LOW", "MEDIUM", "HIGH"]),
-    auto_create_pr: z.boolean().default(true),
+    auto_create_pr: z.boolean().default(false),
     auto_merge: z.literal(false),
     production_deploy: z.literal(false),
     ui_video: z.enum(["required", "optional", "disabled"]).default("required"),
