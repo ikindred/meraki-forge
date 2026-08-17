@@ -52,6 +52,16 @@ describe("task contracts", () => {
   });
   it("rejects missing task frontmatter", () =>
     expect(() => parseTaskMarkdown("# loose note")).toThrow());
+  it("rejects unsafe task frontmatter YAML", () => {
+    expect(() =>
+      parseTaskMarkdown("---\nid: one\nid: two\n---\nbody"),
+    ).toThrow();
+    expect(() =>
+      parseTaskMarkdown(
+        `---\n${"x: { y:".repeat(40)} 1${" }".repeat(40)}\n---\nbody`,
+      ),
+    ).toThrow();
+  });
 });
 
 describe("stack adaptation", () => {

@@ -1,5 +1,7 @@
 export * from "./contracts.js";
 export * from "./acceptance.js";
+export * from "./bootstrap-composition.js";
+export * from "./bootstrap-config.js";
 export * from "./dependency-graph.js";
 export * from "./delivery.js";
 export * from "./execution.js";

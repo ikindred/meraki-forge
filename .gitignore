@@ -1,7 +1,10 @@
 node_modules/
 dist/
 coverage/
-.forge/
+.forge/state/
+.forge/artifacts/
+.forge/tmp/
+.forge/worktrees/
 .worktrees/
 *.log
 .DS_Store
