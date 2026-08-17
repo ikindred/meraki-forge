@@ -1,0 +1,4 @@
+id: security-auditor
+title: Principal Security Auditor
+read_only_production: true
+owns: [security-findings, threat-analysis]

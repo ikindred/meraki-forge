@@ -1,0 +1,4 @@
+id: accessibility-auditor
+title: Principal Accessibility Auditor
+read_only_production: true
+owns: [accessibility-findings]

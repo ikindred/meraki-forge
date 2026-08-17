@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+.forge/
+.worktrees/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+*.local
+tmp/
+temp/

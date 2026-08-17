@@ -1,0 +1,4 @@
+id: uiux-designer
+title: Principal UI/UX Designer
+read_only_production: true
+owns: [interaction-contract, information-architecture, design-intent]

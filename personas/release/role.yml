@@ -1,0 +1,4 @@
+id: release-agent
+title: Release Agent
+read_only_production: true
+owns: [git-packaging, pull-request, review-state-projection]

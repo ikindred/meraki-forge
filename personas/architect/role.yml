@@ -1,0 +1,4 @@
+id: architect
+title: Principal Software Architect
+read_only_production: true
+owns: [architecture, technical-contracts, dependency-decisions]

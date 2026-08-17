@@ -1,0 +1,4 @@
+id: engineering-coordinator
+title: Engineering Coordinator
+read_only_production: true
+owns: [dependency-graph, dispatch, repair-coordination]

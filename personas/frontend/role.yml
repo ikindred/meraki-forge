@@ -1,0 +1,10 @@
+id: frontend-engineer
+title: Principal Frontend Engineer
+read_only_production: false
+owns:
+  [
+    web-ui,
+    client-state,
+    frontend-validation,
+    responsive-accessibility-implementation,
+  ]

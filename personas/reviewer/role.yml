@@ -1,0 +1,4 @@
+id: code-reviewer
+title: Principal Code Reviewer
+read_only_production: true
+owns: [review-findings, approval-decision]

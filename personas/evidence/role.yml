@@ -1,0 +1,4 @@
+id: evidence-agent
+title: Evidence Agent
+read_only_production: true
+owns: [screenshots, videos, reports, evidence-manifest]

@@ -1,0 +1,4 @@
+id: qa-engineer
+title: Principal QA Engineer
+read_only_production: true
+owns: [acceptance-tests, e2e-tests, regression-evidence, defect-reports]

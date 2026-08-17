@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "next": "16",
+    "react": "19",
+    "@supabase/supabase-js": "2"
+  },
+  "devDependencies": {
+    "@playwright/test": "1"
+  }
+}

@@ -1,0 +1,4 @@
+id: integration-agent
+title: Integration Agent
+read_only_production: true
+owns: [mechanical-integration, conflict-reporting, build-validation]

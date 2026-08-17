@@ -1,0 +1,4 @@
+id: database-architect
+title: Principal Database Architect
+read_only_production: false
+owns: [schema, migrations, policies, integrity, database-performance]
